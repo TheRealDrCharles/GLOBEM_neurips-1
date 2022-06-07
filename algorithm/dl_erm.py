@@ -310,6 +310,7 @@ class DepressionDetectionAlgorithm_DL_erm(DepressionDetectionAlgorithmBase):
 
 
     def prep_data_repo(self, dataset:DatasetDict, flag_train:bool = True) -> DataRepo_tf:
+        DA_DF = True
         """ Prepare data repo for deep learning methods """
         super().prep_data_repo(flag_train = flag_train)
         tf.keras.utils.set_random_seed(42)
@@ -379,6 +380,12 @@ class DepressionDetectionAlgorithm_DL_erm(DepressionDetectionAlgorithmBase):
                 df_data_idx['length_test'] = df_data_idx["length"].apply(lambda x : int(np.ceil(x * (1-within_split_ratio))))
                 df_data_idx['idx_train'] = df_data_idx.apply(lambda row : row['idx'][:-row["length_test"]], axis = 1)
                 df_data_idx['idx_test'] = df_data_idx.apply(lambda row : row['idx'][-row["length_test"]:], axis = 1)
+                if DA_DF:
+                    print('DA attempt begin!')
+                    alpha=0.25
+                    df_data_idx['idx_train'] = df_data_idx.apply(lambda row: row['idx'][:-int(np.ceil(1 + alpha)) * row['length_test']], axis=1)
+                    print('DA attempt end!') 
+                
                 if within_split_group == "train":
                     data_idx = np.concatenate(df_data_idx["idx_train"].values)
                 elif within_split_group == "test":

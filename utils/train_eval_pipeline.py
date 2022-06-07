@@ -103,7 +103,7 @@ def single_dataset_within_user_model(dataset: DatasetDict, algorithm: Depression
     Returns:
         Tuple[DataRepo, ClassifierMixin, List[Dict[str, float]]]: (DataRepo, classifier, evalaution results)
     """
-
+    DA_DF = True
     if (verbose>0):
         print("Start data prep...")
     start = time.time()
@@ -133,7 +133,31 @@ def single_dataset_within_user_model(dataset: DatasetDict, algorithm: Depression
     data_idx_test = np.concatenate(df_data_idx["idx_test"].values)
     X_train, y_train = data_repo.X.loc[data_idx_train], data_repo.y.loc[data_idx_train]
     X_test, y_test = data_repo.X.loc[data_idx_test], data_repo.y.loc[data_idx_test]
+    #domain adaptation first attempt
+    if DA_DF:
+        print('begin domain adaptation data fedding!')
+        alpha = 0.25
+        df_data_idx['idx_train'] = df_data_idx.apply(lambda row: row['idx'][:-int(np.ceil(1 + alpha)) * row['length_test']], axis=1)
+        data_idx_train = np.concatenate(df_data_idx["idx_train"].values)
+        X_train, y_train = data_repo.X.loc[data_idx_train], data_repo.y.loc[data_idx_train]
+    if DA_ST:
+        #freze some of the teacher model's parameters
+        for m in clf.modules():
+            if isinstance(m, _DropoutNd):
+                m.training = False
+            if isinstance(m, DropPath):
+                m.training = False
 
+        pseudo_label = clf.predict(X_test) 
+        pseudo_prob = clf.predict_proba(X_test) 
+        ps_large_p = pseudo_prob > pseudo_threshold 
+        ps_size = np.size(pseudo_label)
+        pseudo_weight = np.sum(pseudo_label)/ ps_size
+        pseudo_weight = pseudo_weight * tf.ones(
+        pseudo_prob.shape, device=dev)
+
+   #domain adaptation attempt end
+    
     clf.fit(X = X_train, y = y_train)
 
     results_train = utils_ml.results_report_sklearn(clf=clf,X=X_train,y=y_train,
@@ -270,7 +294,7 @@ def single_dataset_within_user_model_dl(dataset: DatasetDict, algorithm: Depress
 
     ds_test_dict = {}
     ds_test_dict[dataset.key] = ds_test
-
+    
     data_repo_tmp, clf_tmp, results_dict = \
         two_datasets_model(ds_train, ds_test_dict, algorithm, verbose=verbose)
     return data_repo, clf, results_dict[dataset.key]
